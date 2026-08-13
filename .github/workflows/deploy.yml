@@ -1,0 +1,151 @@
+name: Deploy Laravel to cPanel
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: webiro-laravel-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ----------------------------------------
+      # Checkout
+      # ----------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ----------------------------------------
+      # PHP
+      # ----------------------------------------
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, bcmath, ctype, fileinfo, openssl, pdo, pdo_mysql, tokenizer, xml
+          tools: composer
+          coverage: none
+
+      # ----------------------------------------
+      # Composer
+      # ----------------------------------------
+      - name: Install Composer dependencies
+        run: |
+          composer install \
+            --no-dev \
+            --prefer-dist \
+            --no-interaction \
+            --no-progress \
+            --optimize-autoloader
+
+      # ----------------------------------------
+      # Node
+      # ----------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # ----------------------------------------
+      # NPM
+      # ----------------------------------------
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # ----------------------------------------
+      # Vite
+      # ----------------------------------------
+      - name: Build frontend
+        run: npm run build
+
+      # ----------------------------------------
+      # Prepare Laravel package
+      # ----------------------------------------
+      - name: Prepare application package
+        run: |
+          mkdir -p deploy/app
+
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='node_modules/' \
+            --exclude='public/' \
+            ./ deploy/app/
+
+      # ----------------------------------------
+      # Prepare public package
+      # ----------------------------------------
+      - name: Prepare public package
+        run: |
+          mkdir -p deploy/public
+
+          rsync -a public/ deploy/public/
+
+      # ----------------------------------------
+      # Production index.php
+      # ----------------------------------------
+      - name: Configure production entry point
+        run: |
+          cat > deploy/public/index.php <<'PHP'
+          <?php
+
+          use Illuminate\Foundation\Application;
+          use Illuminate\Http\Request;
+
+          define('LARAVEL_START', microtime(true));
+
+          if (file_exists($maintenance = '/home/webiroi1/laravel-app/storage/framework/maintenance.php')) {
+              require $maintenance;
+          }
+
+          require '/home/webiroi1/laravel-app/vendor/autoload.php';
+
+          $app = require_once '/home/webiroi1/laravel-app/bootstrap/app.php';
+
+          $app->handleRequest(Request::capture());
+          PHP
+
+      # ----------------------------------------
+      # Deploy Laravel application
+      # ----------------------------------------
+      - name: Deploy Laravel application
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: ${{ secrets.FTP_PORT }}
+          protocol: ftp
+          local-dir: ./deploy/app/
+          server-dir: /laravel-app/
+          exclude: |
+            .env
+            .env.*
+            storage/logs/*
+            storage/framework/cache/*
+            storage/framework/sessions/*
+            storage/framework/views/*
+
+      # ----------------------------------------
+      # Deploy public directory
+      # ----------------------------------------
+      - name: Deploy public directory
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: ${{ secrets.FTP_PORT }}
+          protocol: ftp
+          local-dir: ./deploy/public/
+          server-dir: /dev.webiro.ir/
