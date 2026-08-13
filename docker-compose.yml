@@ -1,0 +1,31 @@
+services:
+
+  mysql:
+    image: mysql:8.4
+    container_name: webiro-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: webiro_laravel
+      MYSQL_USER: webiro
+      MYSQL_PASSWORD: webiro_local_password
+      MYSQL_ROOT_PASSWORD: root_local_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - webiro_mysql_data:/var/lib/mysql
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: webiro-phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      UPLOAD_LIMIT: 256M
+    ports:
+      - "8080:80"
+
+volumes:
+  webiro_mysql_data:
