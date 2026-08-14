@@ -1,63 +1,77 @@
-name: Deploy Laravel to cPanel
+name: Build & Deploy Static Site
 
 on:
   push:
     branches:
       - master
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
-  deploy:
-    name: Deploy Laravel
+  build:
+    name: Build Static Laravel Site
     runs-on: ubuntu-latest
 
     steps:
-
-      # ----------------------------------------
-      # Checkout Repository
-      # ----------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ----------------------------------------
-      # Deploy Full Laravel Project
-      # ----------------------------------------
-      - name: Deploy Laravel Application
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
+          php-version: '8.4'
+          extensions: mbstring, bcmath, intl, pdo_mysql
+          tools: composer
+          coverage: none
 
-          protocol: ftp
-          port: 21
+      - name: Install Composer dependencies
+        run: composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
 
-          server-dir: /laravel-app/
-
-          state-name: .ftp-deploy-laravel-state.json
-
-          dangerous-clean-slate: false
-
-          exclude: |
-            **/.git/**
-            **/.github/**
-            **/node_modules/**
-
-      # ----------------------------------------
-      # Deploy Public Directory
-      # ----------------------------------------
-      - name: Deploy Public Directory
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          server: ${{ secrets.FTP_HOST }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
+          node-version: 24
+          cache: npm
 
-          protocol: ftp
-          port: 21
+      - name: Install NPM dependencies
+        run: npm ci
 
-          local-dir: ./public/
-          server-dir: /dev.webiro.ir/
+      - name: Build frontend
+        run: npm run build
 
-          state-name: .ftp-deploy-public-state.json
+      - name: Export static website
+        run: php artisan static:export
 
-          dangerous-clean-slate: false
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload static artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
