@@ -11,17 +11,32 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: github-pages
   cancel-in-progress: true
 
 jobs:
+
+  # ========================================
+  # Build
+  # ========================================
+
   build:
-    name: Build Static Laravel Site
+    name: Build Laravel Static Site
     runs-on: ubuntu-latest
 
     steps:
+
+      # ----------------------------------------
+      # Checkout full Laravel repository
+      # ----------------------------------------
+
       - name: Checkout
         uses: actions/checkout@v4
+
+
+      # ----------------------------------------
+      # PHP
+      # ----------------------------------------
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -31,8 +46,24 @@ jobs:
           tools: composer
           coverage: none
 
+
+      # ----------------------------------------
+      # Composer
+      # ----------------------------------------
+
       - name: Install Composer dependencies
-        run: composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+        run: |
+          composer install \
+            --no-dev \
+            --prefer-dist \
+            --no-interaction \
+            --no-progress \
+            --optimize-autoloader
+
+
+      # ----------------------------------------
+      # Node
+      # ----------------------------------------
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -40,25 +71,55 @@ jobs:
           node-version: 24
           cache: npm
 
+
+      # ----------------------------------------
+      # NPM
+      # ----------------------------------------
+
       - name: Install NPM dependencies
         run: npm ci
+
+
+      # ----------------------------------------
+      # Vite
+      # ----------------------------------------
 
       - name: Build frontend
         run: npm run build
 
+
+      # ----------------------------------------
+      # Laravel → Static HTML
+      # ----------------------------------------
+
       - name: Export static website
         run: php artisan static:export
 
-      - name: Setup GitHub Pages
+
+      # ----------------------------------------
+      # GitHub Pages
+      # ----------------------------------------
+
+      - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload static artifact
+
+      # ----------------------------------------
+      # Upload ONLY dist/
+      # ----------------------------------------
+
+      - name: Upload dist as Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
 
+
+  # ========================================
+  # Deploy
+  # ========================================
+
   deploy:
-    name: Deploy to GitHub Pages
+    name: Deploy dist to GitHub Pages
     needs: build
 
     permissions:
@@ -72,6 +133,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy
+
+      - name: Deploy Pages artifact
         id: deployment
         uses: actions/deploy-pages@v4
