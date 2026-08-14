@@ -1,4 +1,4 @@
-name: Build & Deploy Static Site
+name: Deploy Static Site
 
 on:
   push:
@@ -15,125 +15,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-
-  # ========================================
-  # Build
-  # ========================================
-
-  build:
-    name: Build Laravel Static Site
-    runs-on: ubuntu-latest
-
-    steps:
-
-      # ----------------------------------------
-      # Checkout full Laravel repository
-      # ----------------------------------------
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-
-      # ----------------------------------------
-      # PHP
-      # ----------------------------------------
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: mbstring, bcmath, intl, pdo_mysql
-          tools: composer
-          coverage: none
-
-
-      # ----------------------------------------
-      # Composer
-      # ----------------------------------------
-
-      - name: Install Composer dependencies
-        run: |
-          composer install \
-            --no-dev \
-            --prefer-dist \
-            --no-interaction \
-            --no-progress \
-            --optimize-autoloader
-
-
-      # ----------------------------------------
-      # Node
-      # ----------------------------------------
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-
-      # ----------------------------------------
-      # NPM
-      # ----------------------------------------
-
-      - name: Install NPM dependencies
-        run: npm ci
-
-
-      # ----------------------------------------
-      # Vite
-      # ----------------------------------------
-
-      - name: Build frontend
-        run: npm run build
-
-
-      # ----------------------------------------
-      # Laravel → Static HTML
-      # ----------------------------------------
-
-      - name: Export static website
-        run: php artisan static:export
-
-
-      # ----------------------------------------
-      # GitHub Pages
-      # ----------------------------------------
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-
-      # ----------------------------------------
-      # Upload ONLY dist/
-      # ----------------------------------------
-
-      - name: Upload dist as Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist
-
-
-  # ========================================
-  # Deploy
-  # ========================================
-
   deploy:
     name: Deploy dist to GitHub Pages
-    needs: build
-
-    permissions:
-      pages: write
-      id-token: write
+    runs-on: ubuntu-latest
 
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
-    runs-on: ubuntu-latest
-
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Deploy Pages artifact
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload dist
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
