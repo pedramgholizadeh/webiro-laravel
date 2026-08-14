@@ -7,65 +7,21 @@ on:
 
 jobs:
   deploy:
-    name: Build & Deploy
+    name: Deploy Laravel
     runs-on: ubuntu-latest
 
     steps:
 
       # ----------------------------------------
-      # Checkout
+      # Checkout Repository
       # ----------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
 
       # ----------------------------------------
-      # PHP
+      # Deploy Full Laravel Project
       # ----------------------------------------
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: mbstring, bcmath, intl, pdo_mysql
-          tools: composer
-          coverage: none
-
-      # ----------------------------------------
-      # Composer
-      # ----------------------------------------
-      - name: Install Composer dependencies
-        run: |
-          composer install \
-            --no-dev \
-            --prefer-dist \
-            --no-interaction \
-            --no-progress \
-            --optimize-autoloader
-
-      # ----------------------------------------
-      # Node.js
-      # ----------------------------------------
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      # ----------------------------------------
-      # NPM
-      # ----------------------------------------
-      - name: Install NPM dependencies
-        run: npm ci
-
-      # ----------------------------------------
-      # Vite
-      # ----------------------------------------
-      - name: Build frontend assets
-        run: npm run build
-
-      # ----------------------------------------
-      # FTP Deploy
-      # ----------------------------------------
-      - name: Deploy to cPanel
+      - name: Deploy Laravel Application
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_HOST }}
@@ -75,20 +31,33 @@ jobs:
           protocol: ftp
           port: 21
 
-          server-dir: /dev.webiro.ir/
+          server-dir: /laravel-app/
 
-          state-name: .ftp-deploy-sync-state.json
+          state-name: .ftp-deploy-laravel-state.json
 
           dangerous-clean-slate: false
 
           exclude: |
-            **/.git*
+            **/.git/**
             **/.github/**
             **/node_modules/**
-            **/storage/**
-            **/tests/**
-            **/.env
-            **/.env.*
-            **/phpunit.xml
-            **/README.md
-            **/vite.config.js
+
+      # ----------------------------------------
+      # Deploy Public Directory
+      # ----------------------------------------
+      - name: Deploy Public Directory
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+
+          protocol: ftp
+          port: 21
+
+          local-dir: ./public/
+          server-dir: /dev.webiro.ir/
+
+          state-name: .ftp-deploy-public-state.json
+
+          dangerous-clean-slate: false
